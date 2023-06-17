@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { JwtService } from '@nestjs/jwt';
 import { LoginResponseDto } from 'src/auth/dto/login-response.dto';
+import { getAuth, signInWithEmailAndPassword } from '@firebase/auth';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +22,49 @@ export class AuthService {
     }
 
     async signIn(email: string, password: string): Promise<LoginResponseDto> {
+        try {
+            await signInWithEmailAndPassword(getAuth(), email, password);
+        } catch (e) {
+            switch (e.code) {
+                case 'auth/wrong-password': {
+                    throw new HttpException(
+                        {
+                            status: HttpStatus.BAD_REQUEST,
+                            error: 'Wrong password',
+                        },
+                        HttpStatus.BAD_REQUEST,
+                    );
+                }
+                case 'auth/user-not-found': {
+                    throw new HttpException(
+                        {
+                            status: HttpStatus.BAD_REQUEST,
+                            error: 'User not found',
+                        },
+                        HttpStatus.BAD_REQUEST,
+                    );
+                }
+                case 'auth/too-many-requests': {
+                    throw new HttpException(
+                        {
+                            status: HttpStatus.TOO_MANY_REQUESTS,
+                            error: 'Too many requests. Please try again later',
+                        },
+                        HttpStatus.TOO_MANY_REQUESTS,
+                    );
+                }
+                default: {
+                    throw new HttpException(
+                        {
+                            status: HttpStatus.INTERNAL_SERVER_ERROR,
+                            error: 'Unknown error, please try again.',
+                            code: e.code,
+                        },
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                    );
+                }
+            }
+        }
         const user = await this.auth.getUserByEmail(email);
         const token = this.jwtService.sign({
             id: user.uid,
