@@ -6,6 +6,7 @@ import { VideoSharingModule } from './video.sharing/video.sharing.module';
 import { ConfigModule } from '@nestjs/config';
 import authConfig from 'src/config/auth.config';
 import { JwtModule } from '@nestjs/jwt';
+import { YoutubeModule } from './youtube/youtube.module';
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { JwtModule } from '@nestjs/jwt';
         }),
         AuthModule,
         VideoSharingModule,
+        YoutubeModule,
     ],
     controllers: [AppController],
     providers: [AppService],
