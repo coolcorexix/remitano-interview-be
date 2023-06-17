@@ -5,18 +5,24 @@ import { instanceToPlain } from 'class-transformer';
 import { YoutubeService } from 'src/youtube/youtube.service';
 import { auth } from 'firebase-admin';
 import UserRecord = auth.UserRecord;
+import { SocketEventGateway } from 'src/event.handler/socket.event.gateway';
 
 @Injectable()
 export class VideoSharingService {
     private db: admin.database.Database;
 
-    constructor(private readonly youtubeService: YoutubeService) {
+    constructor(
+        private readonly youtubeService: YoutubeService,
+        private readonly eventGateway: SocketEventGateway,
+    ) {
         this.db = admin.database();
     }
 
-    async createVideoSharing(user: UserRecord, videoId: string): Promise<any> {
+    async createVideoSharing(user: UserRecord, videoId: string): Promise<VideoSharingObject> {
         const ref = this.db.ref('video_sharing').push();
-        const videoInfo = await this.youtubeService.getVideoInfo(videoId);
+
+        // Retrieve video information
+        const videoInfo = await this.youtubeService.getYoutubeVideoInfo(videoId);
         if (!videoInfo) {
             throw new HttpException(
                 {
@@ -27,6 +33,7 @@ export class VideoSharingService {
             );
         }
 
+        // Create sharing object and save to database
         const sharingObject: VideoSharingObject = new VideoSharingObject();
         sharingObject.id = ref.key;
         sharingObject.shared_by = {
@@ -36,23 +43,35 @@ export class VideoSharingService {
         };
         sharingObject.video = videoInfo;
         await ref.set(instanceToPlain(sharingObject));
+
+        // Sending video_shared event on socket gateway
+        this.eventGateway.sendVideoSharedEvent({
+            shareId: sharingObject.id,
+            videoTitle: videoInfo.snippet.title,
+            sharedBy: user.displayName,
+        });
         return sharingObject;
     }
 
-    async listSharedVideo(queryOptions: { page: number; pageSize: number }): Promise<any> {
+    async listSharedVideo(queryOptions: { page: number; pageSize: number }): Promise<VideoSharingObject[]> {
+        // Pagination
         const { page = 0, pageSize = 10 } = queryOptions;
         const startOffset = page * pageSize,
             endOffset = (page + 1) * pageSize;
+
+        // Firebase query
         const listSharedVideo = [];
         await this.db
             .ref('video_sharing')
             .orderByChild('shared_at')
-            .limitToLast(100000)
+            .limitToLast(10000)
             .once('value', collection => {
                 collection.forEach(child => {
                     listSharedVideo.push(child.val());
                 });
             });
+
+        // Last save first show
         listSharedVideo.reverse();
         return listSharedVideo.slice(startOffset, endOffset);
     }
@@ -60,10 +79,13 @@ export class VideoSharingService {
     async listSharedVideoByUser(
         user: UserRecord,
         queryOptions: { page: number; pageSize: number },
-    ): Promise<any> {
+    ): Promise<VideoSharingObject[]> {
+        // Pagination
         const { page = 0, pageSize = 10 } = queryOptions;
         const startOffset = page * pageSize,
             endOffset = (page + 1) * pageSize;
+
+        // Firebase query
         const listSharedVideo = [];
         await this.db
             .ref('video_sharing')
@@ -75,6 +97,8 @@ export class VideoSharingService {
                     listSharedVideo.push(child.val());
                 });
             });
+
+        // Last save first show
         listSharedVideo.reverse();
         return listSharedVideo.slice(startOffset, endOffset);
     }
