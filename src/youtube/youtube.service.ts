@@ -15,7 +15,7 @@ export class YoutubeService {
 
     async getVideoInfo(videoId: string): Promise<youtube_v3.Schema$Video> {
         const response = await this.youtubeClient.videos.list({
-            part: ['snippet'],
+            part: ['snippet', 'statistics'],
             id: [videoId],
         });
         const video = response.data.items[0];
