@@ -10,7 +10,9 @@ async function bootstrap() {
         credential: admin.credential.cert(serviceAccount),
         databaseURL: process.env.FIREBASE_RTDB_URL,
     });
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create(AppModule, {
+        cors: true,
+    });
     await app.listen(3000);
 }
 bootstrap();
